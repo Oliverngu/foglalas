@@ -9,7 +9,6 @@ import MeghivokApp from './MeghivokApp';
 import EgysegekApp from './EgysegekApp';
 import PoziciokApp from './PoziciokApp';
 import JogosultsagokApp from './JogosultsagokApp';
-import ReservationSettingsApp from './ReservationSettingsApp';
 
 
 import UsersIcon from '../icons/UsersIcon';
@@ -29,7 +28,7 @@ interface AdminisztracioAppProps {
     canGenerateInvites: boolean;
 }
 
-type AdminTab = 'felhasznalok' | 'meghivok' | 'uzletek' | 'poziciok' | 'jogosultsagok' | 'alkalmazasok' | 'foglalas_beallitasok';
+type AdminTab = 'felhasznalok' | 'meghivok' | 'uzletek' | 'poziciok' | 'jogosultsagok' | 'alkalmazasok';
 
 const TABS: { id: AdminTab; label: string; icon: React.FC<{className?: string}>; roles: User['role'][] }[] = [
     { id: 'felhasznalok', label: 'Felhasználók', icon: UsersIcon, roles: ['Admin', 'Unit Admin'] },
@@ -37,7 +36,6 @@ const TABS: { id: AdminTab; label: string; icon: React.FC<{className?: string}>;
     { id: 'uzletek', label: 'Üzletek', icon: BuildingIcon, roles: ['Admin'] },
     { id: 'poziciok', label: 'Pozíciók', icon: BriefcaseIcon, roles: ['Admin'] },
     { id: 'jogosultsagok', label: 'Jogosultságok', icon: ShieldIcon, roles: ['Admin', 'Unit Admin'] },
-    { id: 'foglalas_beallitasok', label: 'Foglalási Beállítások', icon: CalendarOffIcon, roles: ['Admin', 'Unit Admin'] },
     { id: 'alkalmazasok', label: 'Alkalmazások', icon: SettingsIcon, roles: ['Unit Admin'] },
 ];
 
@@ -110,7 +108,7 @@ const AdminisztracioApp: React.FC<AdminisztracioAppProps> = (props) => {
     const [activeTab, setActiveTab] = useState<AdminTab>(availableTabs[0]?.id || 'felhasznalok');
     
     const renderContent = () => {
-        if (!activeUnitId && (activeTab === 'jogosultsagok' || activeTab === 'alkalmazasok' || activeTab === 'foglalas_beallitasok')) {
+        if (!activeUnitId && (activeTab === 'jogosultsagok' || activeTab === 'alkalmazasok')) {
              return (
                 <div className="p-8 text-center bg-white rounded-2xl shadow-md border">
                     <h2 className="text-xl font-bold text-gray-700">Nincs egység kiválasztva</h2>
@@ -130,8 +128,6 @@ const AdminisztracioApp: React.FC<AdminisztracioAppProps> = (props) => {
                 return <PoziciokApp />;
             case 'jogosultsagok':
                 return <JogosultsagokApp currentUser={currentUser} allPermissions={allPermissions} unitPermissions={unitPermissions} activeUnitId={activeUnitId} />;
-            case 'foglalas_beallitasok':
-                return <ReservationSettingsApp unitId={activeUnitId!} />;
             case 'alkalmazasok':
                 return <AppManager unitId={activeUnitId!} disabledApps={unitPermissions[activeUnitId!]?.disabledApps || []} allUnits={allUnits} />;
             default:

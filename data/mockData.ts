@@ -80,6 +80,10 @@ export interface Booking {
 export interface ReservationSetting {
     id: string; // unitId
     blackoutDates: string[]; // "YYYY-MM-DD"
+    dailyCapacity?: number;
+    bookableWindow?: { from: string; to: string }; // "HH:mm"
+    kitchenOpen?: string; // "HH:mm"
+    barClose?: string; // "HH:mm"
 }
 
 

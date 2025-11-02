@@ -43,19 +43,16 @@ const App: React.FC = () => {
     const pathname = window.location.pathname;
     const isDemo = urlParams.get('demo') === 'true';
     const registerCode = urlParams.get('register');
-    
-    // --- 0. Handle Public Reservation Page ---
-    if (pathname.startsWith('/reserve')) {
+    const isReservePage = pathname.startsWith('/reserve');
+
+    if (isReservePage) {
         const unitId = urlParams.get('unit');
         if (unitId) {
             setPublicPage({ type: 'reserve', unitId });
         } else {
             setPublicPage({ type: 'error', message: 'Nincs egység azonosító megadva a foglaláshoz.' });
         }
-        setAppState('public');
-        return;
     }
-
 
     // --- 1. Handle Demo Mode ---
     if (isDemo) {
@@ -102,6 +99,7 @@ const App: React.FC = () => {
 
     // --- 3. Handle Standard Authentication ---
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+      let finalUserData: User | null = null;
       if (firebaseUser) {
         try {
           const userDocRef = doc(db, 'users', firebaseUser.uid);
@@ -165,16 +163,24 @@ const App: React.FC = () => {
             });
           }
           
+          finalUserData = userData;
           setCurrentUser(userData);
-          setAppState('dashboard');
 
         } catch (error) {
           console.error("Error fetching or creating user data:", error);
           await signOut(auth);
-          setAppState('login');
+          setCurrentUser(null);
         }
       } else {
         setCurrentUser(null);
+      }
+
+      // Now, determine the final app state
+      if (isReservePage) {
+        setAppState('public');
+      } else if (finalUserData) {
+        setAppState('dashboard');
+      } else {
         setAppState('login');
       }
     });
@@ -363,7 +369,7 @@ const App: React.FC = () => {
   switch (appState) {
     case 'public':
         if (publicPage?.type === 'reserve') {
-            return <ReservationPage unitId={publicPage.unitId} allUnits={allUnits} />;
+            return <ReservationPage unitId={publicPage.unitId} allUnits={allUnits} currentUser={currentUser} />;
         }
         return (
             <div className="fixed inset-0 flex items-center justify-center bg-gray-50 p-4">
