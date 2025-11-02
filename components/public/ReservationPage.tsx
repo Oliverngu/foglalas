@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Unit, ReservationSetting, Booking, User } from '../../data/mockData';
+import { Unit, ReservationSetting, Booking, User, ThemeSettings, GuestFormSettings } from '../../data/mockData';
 import { db, Timestamp } from '../../firebase/config';
 import { doc, getDoc, collection, addDoc, query, where, getDocs, setDoc } from 'firebase/firestore';
 import LoadingSpinner from '../LoadingSpinner';
 import MintLeafLogo from '../icons/AppleLogo';
-import SettingsIcon from '../icons/SettingsIcon';
 
 interface ReservationPageProps {
     unitId: string;
@@ -19,6 +18,26 @@ const toDateKey = (date: Date): string => {
     return `${year}-${month}-${day}`;
 };
 
+const DEFAULT_THEME: ThemeSettings = {
+    primary: '#166534', // green-800
+    surface: '#ffffff',
+    background: '#f9fafb', // gray-50
+    textPrimary: '#1f2937', // gray-800
+    textSecondary: '#4b5563', // gray-600
+    accent: '#10b981', // emerald-500
+    success: '#16a34a', // green-600
+    danger: '#dc2626', // red-600
+    radius: 'lg',
+    elevation: 'mid',
+    typographyScale: 'M',
+};
+
+const DEFAULT_GUEST_FORM: GuestFormSettings = {
+    occasionOptions: ['Brunch', 'Ebéd', 'Vacsora', 'Születésnap', 'Italozás', 'Egyéb'],
+    heardFromOptions: ['Google', 'Facebook / Instagram', 'Ismerős ajánlása', 'Sétáltam az utcán', 'Egyéb'],
+};
+
+
 const ProgressIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) => {
     const steps = ['Dátum', 'Részletek', 'Megerősítés'];
     return (
@@ -31,14 +50,14 @@ const ProgressIndicator: React.FC<{ currentStep: number }> = ({ currentStep }) =
                     <React.Fragment key={stepNumber}>
                         <div className="flex flex-col items-center text-center">
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold transition-colors ${
-                                isCompleted ? 'bg-green-700 text-white' : isActive ? 'bg-green-200 text-green-800 border-2 border-green-700' : 'bg-gray-200 text-gray-500'
+                                isCompleted ? 'bg-[var(--color-primary)] text-white' : isActive ? 'bg-green-200 text-[var(--color-primary)] border-2 border-[var(--color-primary)]' : 'bg-gray-200 text-gray-500'
                             }`}>
                                 {isCompleted ? '✓' : stepNumber}
                             </div>
-                            <p className={`mt-2 text-sm font-semibold transition-colors ${isActive || isCompleted ? 'text-gray-800' : 'text-gray-400'}`}>{label}</p>
+                            <p className={`mt-2 text-sm font-semibold transition-colors ${isActive || isCompleted ? 'text-[var(--color-text-primary)]' : 'text-gray-400'}`}>{label}</p>
                         </div>
                         {index < steps.length - 1 && (
-                            <div className={`flex-1 h-1 mx-2 transition-colors ${isCompleted ? 'bg-green-700' : 'bg-gray-200'}`}></div>
+                            <div className={`flex-1 h-1 mx-2 transition-colors ${isCompleted ? 'bg-[var(--color-primary)]' : 'bg-gray-200'}`}></div>
                         )}
                     </React.Fragment>
                 );
@@ -53,10 +72,9 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
     const [settings, setSettings] = useState<ReservationSetting | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     
     const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-    const [formData, setFormData] = useState({ name: '', headcount: '2', occasion: 'Vacsora', startTime: '', endTime: '', source: '', phone: '', email: '' });
+    const [formData, setFormData] = useState({ name: '', headcount: '2', occasion: '', startTime: '', endTime: '', source: '', phone: '', email: '' });
     
     const [isSubmitting, setIsSubmitting] = useState(false);
     
@@ -77,11 +95,28 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
             try {
                 const docRef = doc(db, 'reservation_settings', unitId);
                 const docSnap = await getDoc(docRef);
-                const defaultSettings: ReservationSetting = { id: unitId, blackoutDates: [], bookableWindow: { from: '11:00', to: '23:00'}, kitchenOpen: '22:00', barClose: '24:00' };
+                const defaultSettings: ReservationSetting = { 
+                    id: unitId, 
+                    blackoutDates: [], 
+                    bookableWindow: { from: '11:00', to: '23:00'}, 
+                    kitchenOpen: '22:00', 
+                    barClose: '24:00',
+                    guestForm: DEFAULT_GUEST_FORM,
+                    theme: DEFAULT_THEME,
+                };
                 if (docSnap.exists()) {
-                    setSettings({ ...defaultSettings, ...docSnap.data() });
+                    const dbData = docSnap.data();
+                    const finalSettings = { 
+                        ...defaultSettings, 
+                        ...dbData,
+                        guestForm: { ...DEFAULT_GUEST_FORM, ...(dbData.guestForm || {}) },
+                        theme: { ...DEFAULT_THEME, ...(dbData.theme || {}) },
+                    };
+                    setSettings(finalSettings);
+                    setFormData(prev => ({...prev, occasion: finalSettings.guestForm.occasionOptions[0] || ''}));
                 } else {
                     setSettings(defaultSettings);
+                    setFormData(prev => ({...prev, occasion: defaultSettings.guestForm.occasionOptions[0] || ''}));
                 }
             } catch (err) {
                 console.error("Error fetching reservation settings:", err);
@@ -92,10 +127,26 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
         };
         fetchSettings();
     }, [unit, unitId]);
+
+    // Apply theme as CSS variables
+    useEffect(() => {
+        if (settings?.theme) {
+            const root = document.documentElement;
+            const theme = settings.theme;
+            root.style.setProperty('--color-primary', theme.primary);
+            root.style.setProperty('--color-surface', theme.surface);
+            root.style.setProperty('--color-background', theme.background);
+            root.style.setProperty('--color-text-primary', theme.textPrimary);
+            root.style.setProperty('--color-text-secondary', theme.textSecondary);
+            root.style.setProperty('--color-accent', theme.accent);
+            root.style.setProperty('--color-success', theme.success);
+            root.style.setProperty('--color-danger', theme.danger);
+        }
+    }, [settings?.theme]);
     
     const resetFlow = () => {
         setSelectedDate(null);
-        setFormData({ name: '', headcount: '2', occasion: 'Vacsora', startTime: '', endTime: '', source: '', phone: '', email: '' });
+        setFormData({ name: '', headcount: '2', occasion: settings?.guestForm?.occasionOptions[0] || '', startTime: '', endTime: '', source: '', phone: '', email: '' });
         setStep(1);
     };
 
@@ -143,29 +194,35 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
             setIsSubmitting(false);
         }
     };
-    
-    const isAdmin = currentUser?.role === 'Admin' || currentUser?.role === 'Unit Admin';
 
-    if (error) return <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4 text-center"><div className="bg-white p-8 rounded-lg shadow-md"><h2 className="text-xl font-bold text-red-600">Hiba</h2><p className="text-gray-700 mt-2">{error}</p></div></div>;
-    if (loading || !unit) return <div className="min-h-screen bg-gray-100 flex items-center justify-center"><LoadingSpinner /></div>;
+    const themeClassProps = useMemo(() => {
+        if (!settings?.theme) return { radiusClass: 'rounded-lg', shadowClass: 'shadow-md', fontBaseClass: 'text-base' };
+        const { radius, elevation, typographyScale } = settings.theme;
+        return {
+            radiusClass: { sm: 'rounded-sm', md: 'rounded-md', lg: 'rounded-lg' }[radius],
+            shadowClass: { low: 'shadow-sm', mid: 'shadow-md', high: 'shadow-lg' }[elevation],
+            fontBaseClass: { S: 'text-sm', M: 'text-base', L: 'text-lg' }[typographyScale],
+        };
+    }, [settings?.theme]);
+    
+    if (error) return <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center p-4 text-center"><div className="bg-[var(--color-surface)] p-8 rounded-lg shadow-md"><h2 className="text-xl font-bold text-[var(--color-danger)]">Hiba</h2><p className="text-[var(--color-text-primary)] mt-2">{error}</p></div></div>;
+    if (loading || !unit || !settings) return <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center"><LoadingSpinner /></div>;
     
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center p-4 sm:p-6 md:p-8">
+        <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center p-4 sm:p-6 md:p-8" style={{ color: 'var(--color-text-primary)' }}>
             <header className="text-center mb-8">
                 {unit.logoUrl ? <img src={unit.logoUrl} alt={`${unit.name} logo`} className="h-20 w-auto mx-auto mb-4 rounded-lg"/> : <MintLeafLogo className="h-20 w-20 mx-auto mb-4"/> }
-                <h1 className="text-4xl font-bold text-gray-800">{unit.name}</h1>
-                <p className="text-lg text-gray-600 mt-1">Asztalfoglalás</p>
+                <h1 className="text-4xl font-bold text-[var(--color-text-primary)]">{unit.name}</h1>
+                <p className="text-lg text-[var(--color-text-secondary)] mt-1">Asztalfoglalás</p>
             </header>
-            
-            {isAdmin && <button onClick={() => setIsSettingsOpen(true)} className="absolute top-4 right-4 p-2 bg-white rounded-full shadow border"><SettingsIcon /></button>}
             
             <main className="w-full max-w-2xl">
                 <ProgressIndicator currentStep={step} />
                 <div className="relative overflow-hidden">
                     <div className="flex transition-transform duration-500 ease-in-out" style={{ transform: `translateX(-${(step - 1) * 100}%)` }}>
-                        <div className="w-full flex-shrink-0"><Step1Date settings={settings} onDateSelect={handleDateSelect} /></div>
-                        <div className="w-full flex-shrink-0"><Step2Details selectedDate={selectedDate} formData={formData} setFormData={setFormData} onBack={() => setStep(1)} onSubmit={handleSubmit} isSubmitting={isSubmitting} /></div>
-                        <div className="w-full flex-shrink-0"><Step3Confirmation onReset={resetFlow} /></div>
+                        <div className="w-full flex-shrink-0"><Step1Date settings={settings} onDateSelect={handleDateSelect} themeProps={themeClassProps} /></div>
+                        <div className="w-full flex-shrink-0"><Step2Details selectedDate={selectedDate} formData={formData} setFormData={setFormData} onBack={() => setStep(1)} onSubmit={handleSubmit} isSubmitting={isSubmitting} settings={settings} themeProps={themeClassProps} /></div>
+                        <div className="w-full flex-shrink-0"><Step3Confirmation onReset={resetFlow} themeProps={themeClassProps} /></div>
                     </div>
                 </div>
             </main>
@@ -173,7 +230,7 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
     );
 };
 
-const Step1Date: React.FC<{ settings: ReservationSetting | null, onDateSelect: (date: Date) => void }> = ({ settings, onDateSelect }) => {
+const Step1Date: React.FC<{ settings: ReservationSetting | null, onDateSelect: (date: Date) => void, themeProps: any }> = ({ settings, onDateSelect, themeProps }) => {
     const [currentMonth, setCurrentMonth] = useState(new Date());
     const startOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
     const endOfMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
@@ -186,21 +243,21 @@ const Step1Date: React.FC<{ settings: ReservationSetting | null, onDateSelect: (
     const today = new Date(); today.setHours(0,0,0,0);
 
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-3 text-center">1. Válassz napot</h2>
+        <div className={`bg-[var(--color-surface)] p-6 ${themeProps.radiusClass} ${themeProps.shadowClass} border border-gray-100`}>
+            <h2 className="text-2xl font-semibold text-[var(--color-text-primary)] mb-3 text-center">1. Válassz napot</h2>
             <div className="flex justify-between items-center mb-4">
                 <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 rounded-full hover:bg-gray-100">&lt;</button>
                 <h3 className="font-bold text-lg">{currentMonth.toLocaleDateString('hu-HU', { month: 'long', year: 'numeric' })}</h3>
                 <button type="button" onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 rounded-full hover:bg-gray-100">&gt;</button>
             </div>
-            <div className="grid grid-cols-7 gap-1 text-center font-semibold text-gray-500 text-sm mb-2">{['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'].map(d => <div key={d}>{d}</div>)}</div>
+            <div className="grid grid-cols-7 gap-1 text-center font-semibold text-[var(--color-text-secondary)] text-sm mb-2">{['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'].map(d => <div key={d}>{d}</div>)}</div>
             <div className="grid grid-cols-7 gap-1">
                 {days.map((day, i) => {
                     if (!day) return <div key={`empty-${i}`}></div>;
                     const dateKey = toDateKey(day);
                     const isDisabled = blackoutSet.has(dateKey) || day < today;
                     return (
-                        <div key={dateKey}><button type="button" onClick={() => onDateSelect(day)} disabled={isDisabled} className={`w-full p-1 h-12 flex items-center justify-center text-sm rounded-lg transition-colors ${isDisabled ? 'text-gray-300 bg-gray-50 cursor-not-allowed' : 'hover:bg-green-100'}`} >{day.getDate()}</button></div>
+                        <div key={dateKey}><button type="button" onClick={() => onDateSelect(day)} disabled={isDisabled} className={`w-full p-1 h-12 flex items-center justify-center text-sm ${themeProps.radiusClass} transition-colors ${isDisabled ? 'text-gray-300 bg-gray-50 cursor-not-allowed' : 'hover:bg-green-100'}`} >{day.getDate()}</button></div>
                     );
                 })}
             </div>
@@ -208,13 +265,13 @@ const Step1Date: React.FC<{ settings: ReservationSetting | null, onDateSelect: (
     );
 }
 
-const Step2Details: React.FC<any> = ({ selectedDate, formData, setFormData, onBack, onSubmit, isSubmitting }) => {
-    const occasionOptions = ['Brunch', 'Ebéd', 'Vacsora', 'Születésnap', 'Italozás', 'Egyéb'];
-    const sourceOptions = ['Google', 'Facebook / Instagram', 'Ismerős ajánlása', 'Sétáltam az utcán', 'Egyéb'];
+const Step2Details: React.FC<any> = ({ selectedDate, formData, setFormData, onBack, onSubmit, isSubmitting, settings, themeProps }) => {
+    const occasionOptions = settings?.guestForm?.occasionOptions || DEFAULT_GUEST_FORM.occasionOptions;
+    
     if (!selectedDate) return null;
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
-            <h2 className="text-2xl font-semibold text-gray-700 mb-3">2. Add meg az adatokat</h2>
+        <div className={`bg-[var(--color-surface)] p-6 ${themeProps.radiusClass} ${themeProps.shadowClass} border border-gray-100`}>
+            <h2 className="text-2xl font-semibold text-[var(--color-text-primary)] mb-3">2. Add meg az adatokat</h2>
             <form onSubmit={onSubmit} className="space-y-4">
                 <input type="text" readOnly value={selectedDate.toLocaleDateString('hu-HU', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })} className="w-full p-2 border rounded-lg bg-gray-100 text-center font-semibold"/>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -227,29 +284,22 @@ const Step2Details: React.FC<any> = ({ selectedDate, formData, setFormData, onBa
                 </div>
                 <div><label className="block text-sm font-medium">Alkalom</label><select name="occasion" value={formData.occasion} onChange={e => setFormData({...formData, occasion: e.target.value})} className="w-full mt-1 p-2 border rounded-lg bg-white"><option disabled value="">Válassz...</option>{occasionOptions.map(o => <option key={o} value={o}>{o}</option>)}</select></div>
                 <div className="flex justify-between items-center pt-4">
-                    <button type="button" onClick={onBack} className="bg-gray-200 text-gray-800 font-bold py-2 px-4 rounded-lg hover:bg-gray-300">Vissza</button>
-                    <button type="submit" disabled={isSubmitting} className="bg-green-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-green-800 disabled:bg-gray-400 text-lg">{isSubmitting ? 'Küldés...' : 'Tovább'}</button>
+                    <button type="button" onClick={onBack} className={`bg-gray-200 text-gray-800 font-bold py-2 px-4 ${themeProps.radiusClass} hover:bg-gray-300`}>Vissza</button>
+                    <button type="submit" disabled={isSubmitting} className={`text-white font-bold py-2 px-6 ${themeProps.radiusClass} disabled:bg-gray-400 text-lg`} style={{ backgroundColor: 'var(--color-primary)' }}>{isSubmitting ? 'Küldés...' : 'Tovább'}</button>
                 </div>
             </form>
         </div>
     )
 }
 
-const Step3Confirmation: React.FC<{ onReset: () => void }> = ({ onReset }) => {
+const Step3Confirmation: React.FC<{ onReset: () => void, themeProps: any }> = ({ onReset, themeProps }) => {
     return (
-        <div className="bg-white p-8 rounded-2xl shadow-lg border border-gray-100 text-center">
-            <h2 className="text-2xl font-bold text-green-700">Foglalási kérés elküldve!</h2>
-            <p className="text-gray-700 mt-4">Köszönjük! Hamarosan felvesszük Önnel a kapcsolatot a megadott elérhetőségeken a foglalás megerősítésével kapcsolatban.</p>
-            <button onClick={onReset} className="mt-6 bg-green-700 text-white font-bold py-3 px-6 rounded-lg hover:bg-green-800">Új foglalás</button>
+        <div className={`bg-[var(--color-surface)] p-8 ${themeProps.radiusClass} ${themeProps.shadowClass} border border-gray-100 text-center`}>
+            <h2 className="text-2xl font-bold" style={{ color: 'var(--color-success)' }}>Foglalási kérés elküldve!</h2>
+            <p className="text-[var(--color-text-primary)] mt-4">Köszönjük! Hamarosan felvesszük Önnel a kapcsolatot a megadott elérhetőségeken a foglalás megerősítésével kapcsolatban.</p>
+            <button onClick={onReset} className={`mt-6 text-white font-bold py-3 px-6 ${themeProps.radiusClass}`} style={{ backgroundColor: 'var(--color-primary)' }}>Új foglalás</button>
         </div>
     );
 }
-
-// Settings modal needs to be created
-const SettingsModal: React.FC<{ unitId: string, settings: ReservationSetting, onClose: () => void, onSave: () => void }> = ({ unitId, settings: initialSettings, onClose, onSave }) => {
-    return (
-        <div>Modal Placeholder</div>
-    )
-};
 
 export default ReservationPage;

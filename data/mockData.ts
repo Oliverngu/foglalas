@@ -75,15 +75,39 @@ export interface Booking {
   notes?: string;
   phone?: string;
   email?: string;
+  cancelledAt?: Timestamp;
+  cancelReason?: string;
+}
+
+export interface ThemeSettings {
+    primary: string;
+    surface: string;
+    background: string;
+    textPrimary: string;
+    textSecondary: string;
+    accent: string;
+    success: string;
+    danger: string;
+    radius: 'sm' | 'md' | 'lg';
+    elevation: 'low' | 'mid' | 'high';
+    typographyScale: 'S' | 'M' | 'L';
+}
+
+export interface GuestFormSettings {
+    occasionOptions: string[];
+    heardFromOptions: string[];
 }
 
 export interface ReservationSetting {
     id: string; // unitId
     blackoutDates: string[]; // "YYYY-MM-DD"
-    dailyCapacity?: number;
+    dailyCapacity?: number | null;
     bookableWindow?: { from: string; to: string }; // "HH:mm"
-    kitchenOpen?: string; // "HH:mm"
-    barClose?: string; // "HH:mm"
+    kitchenOpen?: string | null;
+    barClose?: string | null;
+    guestForm?: GuestFormSettings;
+    theme?: ThemeSettings;
+    schemaVersion?: number;
 }
 
 
@@ -247,16 +271,16 @@ export interface Poll {
   closesAt: Timestamp | null;
 }
 
-export interface PollVote {
-  userId: string;
-  selectedOptionIds: string[];
-  votedAt: Timestamp;
-}
-
 export interface PollWithResults extends Poll {
   results: Record<string, number>;
   totalVotes: number;
   userVote: string[] | null;
+}
+
+export interface PollVote {
+  userId: string;
+  selectedOptionIds: string[];
+  votedAt: Timestamp;
 }
 
 // --- DEMO MODE DATA ---

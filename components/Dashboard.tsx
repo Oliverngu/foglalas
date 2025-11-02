@@ -122,10 +122,22 @@ const Dashboard: React.FC<DashboardProps> = ({
   }, [categoryStorageKey]);
 
   useEffect(() => {
-    if (categoryStorageKey && Object.keys(openCategories).length > 0) {
+    if (categoryStorageKey) {
         try {
-            localStorage.setItem(categoryStorageKey, JSON.stringify(openCategories));
+            // Sanitize the state to prevent stringifying non-serializable values
+            const sanitizedState: Record<string, boolean> = {};
+            for (const key in openCategories) {
+                if (Object.prototype.hasOwnProperty.call(openCategories, key)) {
+                    const value = openCategories[key];
+                    if (typeof value === 'boolean') {
+                        sanitizedState[key] = value;
+                    }
+                    // Silently ignore non-boolean properties to prevent crash
+                }
+            }
+            localStorage.setItem(categoryStorageKey, JSON.stringify(sanitizedState));
         } catch (e) {
+            // This catch block is for JSON.stringify errors, which the sanitization should prevent.
             console.error("Failed to save sidebar state to localStorage", e);
         }
     }

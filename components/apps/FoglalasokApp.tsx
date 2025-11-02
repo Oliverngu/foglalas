@@ -1,11 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Booking, User, Unit } from '../../data/mockData';
-import { db, Timestamp } from '../../firebase/config';
-import { collection, query, where, orderBy, onSnapshot, addDoc } from 'firebase/firestore';
+import { db, Timestamp, serverTimestamp } from '../../firebase/config';
+import { collection, query, where, orderBy, onSnapshot, addDoc, doc, updateDoc } from 'firebase/firestore';
 import BookingIcon from '../icons/BookingIcon';
 import LoadingSpinner from '../LoadingSpinner';
 import AddBookingModal from './AddBookingModal';
 import PlusIcon from '../icons/PlusIcon';
+import SettingsIcon from '../icons/SettingsIcon';
+import ReservationSettingsModal from './ReservationSettingsModal';
+import TrashIcon from '../icons/TrashIcon';
 
 interface FoglalasokAppProps {
   currentUser: User;
@@ -14,11 +17,48 @@ interface FoglalasokAppProps {
   activeUnitIds: string[];
 }
 
+const DeleteConfirmationModal: React.FC<{
+  booking: Booking;
+  onClose: () => void;
+  onConfirm: (reason: string) => void;
+}> = ({ booking, onClose, onConfirm }) => {
+    const [reason, setReason] = useState('');
+    return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[70] p-4" onClick={onClose}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+                <div className="p-5 border-b">
+                    <h2 className="text-xl font-bold text-gray-800">Foglalás törlése</h2>
+                </div>
+                <div className="p-6 space-y-4">
+                    <p>Biztosan törlöd a(z) <span className="font-bold">{booking.name}</span> nevű foglalást erre a napra: <span className="font-bold">{booking.startTime.toDate().toLocaleDateString('hu-HU')}</span>? A művelet nem vonható vissza.</p>
+                    <div>
+                        <label htmlFor="cancelReason" className="text-sm font-medium text-gray-700">Indoklás (opcionális)</label>
+                        <textarea
+                            id="cancelReason"
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            rows={3}
+                            className="w-full mt-1 p-2 border rounded-lg"
+                            placeholder="Pl. vendég lemondta, dupla foglalás..."
+                        />
+                    </div>
+                </div>
+                <div className="p-4 bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
+                    <button type="button" onClick={onClose} className="bg-gray-200 px-4 py-2 rounded-lg font-semibold">Mégse</button>
+                    <button type="button" onClick={() => onConfirm(reason)} className="bg-red-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-700">Törlés</button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const BookingDetailsModal: React.FC<{
   selectedDate: Date;
   bookings: Booking[];
   onClose: () => void;
-}> = ({ selectedDate, bookings, onClose }) => {
+  isAdmin: boolean;
+  onDelete: (booking: Booking) => void;
+}> = ({ selectedDate, bookings, onClose, isAdmin, onDelete }) => {
   return (
     <div 
       className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" 
@@ -43,7 +83,7 @@ const BookingDetailsModal: React.FC<{
             bookings
               .sort((a, b) => a.startTime.toMillis() - b.startTime.toMillis())
               .map(booking => (
-                <div key={booking.id} className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                <div key={booking.id} className="bg-gray-50 p-4 rounded-xl border border-gray-200 relative group">
                    <p className="font-bold text-gray-800">{booking.name} ({booking.headcount} fő)</p>
                    <p className="text-sm text-gray-600 font-semibold">
                      {booking.startTime.toDate().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })} - {booking.endTime.toDate().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' })}
@@ -52,6 +92,11 @@ const BookingDetailsModal: React.FC<{
                      Alkalom: {booking.occasion}
                    </p>
                    {booking.notes && <p className="text-sm text-gray-500 mt-1">Megjegyzés: {booking.notes}</p>}
+                   {isAdmin && (
+                        <button onClick={() => onDelete(booking)} className="absolute top-3 right-3 p-2 text-gray-400 bg-white/50 rounded-full opacity-0 group-hover:opacity-100 hover:text-red-600 hover:bg-red-100 transition-opacity" title="Foglalás törlése">
+                            <TrashIcon className="h-5 w-5" />
+                        </button>
+                   )}
                 </div>
               ))
           ) : (
@@ -71,8 +116,11 @@ const FoglalasokApp: React.FC<FoglalasokAppProps> = ({ currentUser, canAddBookin
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [bookingToDelete, setBookingToDelete] = useState<Booking | null>(null);
 
   const activeUnitId = activeUnitIds.length === 1 ? activeUnitIds[0] : null;
+  const isAdmin = currentUser.role === 'Admin' || currentUser.role === 'Unit Admin';
 
   useEffect(() => {
     if (!activeUnitId) {
@@ -115,7 +163,7 @@ const FoglalasokApp: React.FC<FoglalasokAppProps> = ({ currentUser, canAddBookin
 
   const bookingsByDate = useMemo(() => {
     const map = new Map<string, Booking[]>();
-    bookings.forEach(booking => {
+    bookings.filter(b => b.status !== 'cancelled').forEach(booking => {
       const key = toLocalDateKey(booking.startTime.toDate());
       if (!map.has(key)) {
         map.set(key, []);
@@ -140,6 +188,21 @@ const FoglalasokApp: React.FC<FoglalasokAppProps> = ({ currentUser, canAddBookin
   const handleAddBooking = async (bookingData: Omit<Booking, 'id'>) => {
     await addDoc(collection(db, 'units', activeUnitId, 'reservations'), bookingData);
     setIsAddModalOpen(false);
+  };
+
+  const handleConfirmDelete = async (reason: string) => {
+    if (!bookingToDelete) return;
+    try {
+        await updateDoc(doc(db, 'units', activeUnitId, 'reservations', bookingToDelete.id), {
+            status: 'cancelled',
+            cancelledAt: serverTimestamp(),
+            cancelReason: reason || '',
+        });
+        setBookingToDelete(null);
+    } catch (err) {
+        console.error("Error deleting booking:", err);
+        alert("Hiba a foglalás törlésekor.");
+    }
   };
   
   const openGuestPage = () => {
@@ -247,6 +310,15 @@ const FoglalasokApp: React.FC<FoglalasokAppProps> = ({ currentUser, canAddBookin
                     Új foglalás
                 </button>
             )}
+            {isAdmin && activeUnitId && (
+                 <button 
+                    onClick={() => setIsSettingsOpen(true)}
+                    className="p-2 rounded-full bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    title="Foglalási beállítások"
+                >
+                    <SettingsIcon className="h-6 w-6" />
+                </button>
+            )}
         </div>
       </div>
 
@@ -260,6 +332,8 @@ const FoglalasokApp: React.FC<FoglalasokAppProps> = ({ currentUser, canAddBookin
           selectedDate={selectedDate}
           bookings={bookingsByDate.get(toLocalDateKey(selectedDate)) || []}
           onClose={() => setSelectedDate(null)}
+          isAdmin={isAdmin}
+          onDelete={setBookingToDelete}
         />
       )}
        {isAddModalOpen && (
@@ -268,6 +342,19 @@ const FoglalasokApp: React.FC<FoglalasokAppProps> = ({ currentUser, canAddBookin
           onClose={() => setIsAddModalOpen(false)}
           onAddBooking={handleAddBooking}
           unitId={activeUnitId}
+        />
+      )}
+       {isSettingsOpen && activeUnitId && (
+        <ReservationSettingsModal
+            unitId={activeUnitId}
+            onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
+      {bookingToDelete && (
+        <DeleteConfirmationModal
+            booking={bookingToDelete}
+            onClose={() => setBookingToDelete(null)}
+            onConfirm={handleConfirmDelete}
         />
       )}
     </div>
