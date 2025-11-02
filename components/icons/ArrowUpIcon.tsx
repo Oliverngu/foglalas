@@ -1,7 +1,6 @@
 import React from 'react';
 
-// Fix: Redefined component to avoid potential issues with React.FC and intrinsic attributes error.
-const ArrowUpIcon = ({ className = "h-5 w-5" }: { className?: string }) => (
+const ArrowUpIcon: React.FC<{ className?: string }> = ({ className = "h-5 w-5" }) => (
   <svg
     xmlns="http://www.w3.org/2000/svg"
     className={className}

@@ -19,7 +19,6 @@ import PollsIcon from './icons/PollsIcon';
 interface HomeDashboardProps {
   currentUser: User;
   requests: Request[];
-  bookings: Booking[];
   schedule: Shift[];
   todos: Todo[];
   adminTodos: Todo[];
@@ -41,7 +40,7 @@ const DEFAULT_WIDGETS: WidgetConfig[] = [
     { id: 'bookings', visible: true, order: 8 },
 ];
 
-const HomeDashboard: React.FC<HomeDashboardProps> = ({ currentUser, requests, bookings, schedule, todos, adminTodos, timeEntries, setActiveApp, feedbackList, polls, activeUnitIds }) => {
+const HomeDashboard: React.FC<HomeDashboardProps> = ({ currentUser, requests, schedule, todos, adminTodos, timeEntries, setActiveApp, feedbackList, polls, activeUnitIds }) => {
   const [isClockInModalOpen, setClockInModalOpen] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [widgetConfig, setWidgetConfig] = useState<WidgetConfig[]>([]);
@@ -471,7 +470,7 @@ const HomeDashboard: React.FC<HomeDashboardProps> = ({ currentUser, requests, bo
                 todos: 'todos',
                 requests: 'kerelemek',
                 schedule: 'beosztas',
-                bookings: 'foglalosok',
+                bookings: 'foglalasok',
                 velemenyek: 'velemenyek',
                 szavazasok: 'szavazasok',
             };

@@ -42,6 +42,7 @@ import UserIcon from './icons/UserIcon';
 import ArrowDownIcon from './icons/ArrowDownIcon';
 import InvitationIcon from './icons/InvitationIcon';
 import BuildingIcon from './icons/BuildingIcon';
+import CalendarOffIcon from './icons/CalendarOffIcon';
 
 
 interface DashboardProps {
@@ -49,7 +50,6 @@ interface DashboardProps {
   onLogout: () => void;
   isDemoMode: boolean;
   requests: Request[];
-  bookings: Booking[];
   shifts: Shift[];
   todos: Todo[];
   adminTodos: Todo[];
@@ -65,9 +65,6 @@ interface DashboardProps {
 
 type AppName = 'home' | 'kerelemek' | 'foglalasok' | 'beosztas' | 'settings' | 'todos' | 'admin_todos' | 'elerhetosegek' | 'tudastar' | 'velemenyek' | 'berezesem' | 'adminisztracio' | 'szavazasok' | 'chat';
 
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRlC0gMm9GN26hYS4FZEDr0QdJ4cKhaKGChrABgBonVkJpMiylOGO8gzOdJfxrCn_zkw/exec';
-const APPROVAL_SECRET = 'ginavo2025'; // A szkriptben definiált titkos kulcs
-
 const AccessDenied: React.FC = () => (
   <div className="flex items-center justify-center h-full p-8 text-center bg-gray-100">
     <div>
@@ -82,7 +79,6 @@ const Dashboard: React.FC<DashboardProps> = ({
     onLogout,
     isDemoMode,
     requests,
-    bookings: initialBookings,
     shifts,
     todos,
     adminTodos,
@@ -141,152 +137,6 @@ const Dashboard: React.FC<DashboardProps> = ({
   // --- End Accordion Menu State ---
 
   const { selectedUnits: activeUnitIds, setSelectedUnits: setActiveUnitIds, allUnits: contextAllUnits } = useUnitContext();
-
-  const [bookings, setBookings] = useState<Booking[]>(initialBookings);
-  const [bookingsLoading, setBookingsLoading] = useState(true);
-  const [bookingsError, setBookingsError] = useState<string | null>(null);
-
-  const isSuperAdmin = currentUser?.role === 'Admin';
-  const isUnitAdmin = currentUser?.role === 'Unit Admin' && currentUser?.unitIds && currentUser.unitIds.length > 0;
-
-
-  const fetchBookingData = useCallback(async () => {
-    if (isDemoMode) {
-        setBookingsLoading(false);
-        return;
-    }
-
-    const ginUnit = allUnits.find(u => u.name === "Gin and Avocado");
-    const isGinUnitActive = ginUnit && activeUnitIds.includes(ginUnit.id);
-
-    if (!isGinUnitActive) {
-        setBookings([]);
-        setBookingsLoading(false);
-        return;
-    }
-
-    const sheetId = ginUnit.sheetId;
-    if (!sheetId) {
-        console.warn('"Gin and Avocado" unit is active, but has no "sheetId" property.');
-        setBookings([]);
-        setBookingsLoading(false);
-        return;
-    }
-
-    setBookingsLoading(true);
-    setBookingsError(null);
-
-    try {
-        const details: Record<string, string> = {
-            'action': 'list',
-            'sheet_id': sheetId,
-            'sheet_name': 'Foglalások',
-            'secret': APPROVAL_SECRET
-        };
-
-        const formBody = Object.keys(details).map(key => 
-            encodeURIComponent(key) + '=' + encodeURIComponent(details[key])
-        ).join('&');
-        
-        const response = await fetch(APPS_SCRIPT_URL, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'
-            },
-            body: formBody,
-        });
-
-        if (!response.ok) {
-            let errorText = `Szerverhiba: ${response.status}`;
-            try {
-                const errorData = await response.json();
-                errorText = errorData.error || `Ismeretlen hiba: ${JSON.stringify(errorData)}`;
-            } catch (jsonError) {
-                try {
-                    errorText = await response.text();
-                } catch (textError) { /* ignore */ }
-            }
-            throw new Error(errorText);
-        }
-
-        const data = await response.json();
-    
-        if (data && data.ok === true && Array.isArray(data.bookings)) {
-            const parsedBookings: Booking[] = data.bookings.map((item: any, index: number) => {
-                try {
-                    if (!item['Dátum'] || !item['Kezdőidő']) {
-                         console.warn("Skipping booking item due to missing date or time:", item);
-                         return null;
-                    }
-                    
-                    // Use a specific timezone to interpret the date correctly, regardless of user's location.
-                    const dateStr = new Date(item['Dátum']).toLocaleDateString('en-CA', { timeZone: 'Europe/Budapest' });
-                    
-                    let timeStr = '00:00:00';
-                    const timeDate = new Date(item['Kezdőidő']);
-                    if (!isNaN(timeDate.getTime())) {
-                        // Extract time using UTC methods to avoid local timezone shifts from the 1899 date format
-                        const hours = timeDate.getUTCHours().toString().padStart(2, '0');
-                        const minutes = timeDate.getUTCMinutes().toString().padStart(2, '0');
-                        const seconds = timeDate.getUTCSeconds().toString().padStart(2, '0');
-                        timeStr = `${hours}:${minutes}:${seconds}`;
-                    }
-
-                    // The combined string creates a "local" time string, which new Date() will parse
-                    // according to the user's browser's timezone. This is correct as we want to display
-                    // 14:30 on Sep 12, regardless of where the user is.
-                    const combinedDateTimeStr = `${dateStr}T${timeStr}`;
-                    const bookingDate = new Date(combinedDateTimeStr);
-
-                    if (isNaN(bookingDate.getTime())) {
-                        throw new Error(`Invalid combined date string: ${combinedDateTimeStr}`);
-                    }
-                    
-                    // Correctly access all other properties with accents/casing
-                    const guestName = item['Név'] || 'Ismeretlen';
-                    const service = item['Szolgáltatás'] || 'Foglalás';
-                    const phone = item['Telefon'] || '-';
-                    const email = item['Email'] || '-';
-                    const headcount = item['Létszám'] || '?';
-                    const note = item['Megjegyzés'] || 'Nincs';
-                    const guestCountInt = parseInt(String(headcount), 10) || 0;
-                    
-                    return {
-                        id: `${item['Dátum']}-${item['Kezdőidő']}-${index}`,
-                        title: service,
-                        date: bookingDate,
-                        description: `Vendég: ${guestName} | Tel: ${phone} | Email: ${email} | Létszám: ${headcount} fő | Megjegyzés: ${note}`,
-                        guestName: guestName,
-                        guestCount: guestCountInt,
-                        note: note,
-                    };
-
-                } catch (e) {
-                    console.warn("Could not parse booking item, skipping:", item, e);
-                    return null;
-                }
-            }).filter((b): b is Booking => b !== null);
-            setBookings(parsedBookings);
-        } else {
-            const serverError = data.error || `Ismeretlen hiba a Google Script-től. Válasz: ${JSON.stringify(data)}`;
-            console.error("Booking data received from script is not in the expected format:", data);
-            throw new Error(serverError);
-        }
-    } catch (e: any) {
-      console.error('Error fetching booking data from Google Sheets:', e);
-      setBookings([]);
-      setBookingsError(`Hiba a foglalások lekérdezésekor: ${e.message}`);
-    } finally {
-        setBookingsLoading(false);
-    }
-}, [isDemoMode, allUnits, activeUnitIds]);
-
-
-  useEffect(() => {
-    fetchBookingData();
-    const intervalId = setInterval(fetchBookingData, 5 * 60 * 1000); // Poll every 5 minutes
-    return () => clearInterval(intervalId);
-  }, [fetchBookingData]);
   
   // The check for currentUser is handled in App.tsx, so it's safe to assume it's not null here.
   if (!currentUser) {
@@ -429,7 +279,6 @@ const Dashboard: React.FC<DashboardProps> = ({
             return <HomeDashboard 
                 currentUser={currentUser}
                 requests={requests}
-                bookings={bookings}
                 schedule={shifts}
                 todos={todos}
                 adminTodos={adminTodos}
@@ -442,8 +291,6 @@ const Dashboard: React.FC<DashboardProps> = ({
         case 'kerelemek':
             return <KerelemekApp requests={requests} loading={false} error={null} currentUser={currentUser} canManage={hasPermission('canManageLeaveRequests')} />;
         case 'foglalasok':
-            // Fix: The FoglalasokApp component's props have changed. It now fetches its own data.
-            // The old props related to Google Sheets data fetching are no longer needed.
             return <FoglalasokApp 
                         currentUser={currentUser} 
                         canAddBookings={hasPermission('canAddBookings')}
@@ -477,7 +324,6 @@ const Dashboard: React.FC<DashboardProps> = ({
             return <HomeDashboard 
                 currentUser={currentUser}
                 requests={requests}
-                bookings={bookings}
                 schedule={shifts}
                 todos={todos}
                 adminTodos={adminTodos}
@@ -524,7 +370,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             
             <CategoryItem name="feladatok" label="Feladatok és Tudás" icon={TodoIcon}>
                 <NavItem app="todos" icon={TodoIcon} label="Teendők" />
-                {isSuperAdmin && <NavItem app="admin_todos" icon={AdminTodoIcon} label="Vezetői Teendők" />}
+                {currentUser.role === 'Admin' && <NavItem app="admin_todos" icon={AdminTodoIcon} label="Vezetői Teendők" />}
                 <NavItem app="tudastar" icon={BookIcon} label="Tudástár" />
             </CategoryItem>
 

@@ -25,8 +25,6 @@ const App: React.FC = () => {
 
   // --- Data States lifted from Dashboard ---
   const [requests, setRequests] = useState<Request[]>([]);
-  // Fix: Add 'bookings' state as it is required by the Dashboard component.
-  const [bookings, setBookings] = useState<Booking[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
   const [todos, setTodos] = useState<Todo[]>([]);
   const [adminTodos, setAdminTodos] = useState<Todo[]>([]);
@@ -65,8 +63,6 @@ const App: React.FC = () => {
       setCurrentUser(demoUser);
       // Populate state with demo data
       setRequests(demoData.requests);
-      // Fix: Populate bookings for demo mode.
-      setBookings(demoData.bookings);
       setShifts(demoData.shifts);
       setTodos(demoData.todos);
       setAdminTodos(demoData.adminTodos);
@@ -407,7 +403,6 @@ const App: React.FC = () => {
               timeEntries={timeEntries}
               feedbackList={feedbackList}
               polls={polls}
-              bookings={bookings}
               firestoreError={firestoreError}
             />
         </UnitProvider>
