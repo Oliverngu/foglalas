@@ -211,7 +211,6 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
     return (
         <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center p-4 sm:p-6 md:p-8" style={{ color: 'var(--color-text-primary)' }}>
             <header className="text-center mb-8">
-                {unit.logoUrl ? <img src={unit.logoUrl} alt={`${unit.name} logo`} className="h-20 w-auto mx-auto mb-4 rounded-lg"/> : <MintLeafLogo className="h-20 w-20 mx-auto mb-4"/> }
                 <h1 className="text-4xl font-bold text-[var(--color-text-primary)]">{unit.name}</h1>
                 <p className="text-lg text-[var(--color-text-secondary)] mt-1">Asztalfoglalás</p>
             </header>
