@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Unit, Booking } from '../../data/mockData';
 import { db, serverTimestamp } from '../../firebase/config';
-import { collectionGroup, query, where, getDocs, limit, doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import LoadingSpinner from '../LoadingSpinner';
 import { translations } from '../../lib/i18n';
 import CalendarIcon from '../icons/CalendarIcon';
@@ -25,39 +25,36 @@ const ManageReservationPage: React.FC<ManageReservationPageProps> = ({ token, al
         const fetchBooking = async () => {
             setLoading(true);
             try {
-                const q = query(
-                    collectionGroup(db, 'reservations'),
-                    where('referenceCode', '==', token),
-                    limit(1)
-                );
-                const querySnapshot = await getDocs(q);
-                if (querySnapshot.empty) {
+                let foundBooking: Booking | null = null;
+                let foundUnit: Unit | null = null;
+
+                for (const unit of allUnits) {
+                    const bookingRef = doc(db, 'units', unit.id, 'reservations', token);
+                    const bookingSnap = await getDoc(bookingRef);
+                    if (bookingSnap.exists()) {
+                        foundBooking = { id: bookingSnap.id, ...bookingSnap.data() } as Booking;
+                        foundUnit = unit;
+                        break;
+                    }
+                }
+
+                if (!foundBooking) {
                     setError('A foglalás nem található.');
                 } else {
-                    const bookingDoc = querySnapshot.docs[0];
-                    const bookingData = { id: bookingDoc.id, ...bookingDoc.data() } as Booking;
-                    setBooking(bookingData);
-
-                    const currentUnit = allUnits.find(u => u.id === bookingData.unitId);
-                    setUnit(currentUnit || null);
+                    setBooking(foundBooking);
+                    setUnit(foundUnit);
 
                     const urlParams = new URLSearchParams(window.location.search);
                     const langOverride = urlParams.get('lang');
                     if (langOverride === 'en' || langOverride === 'hu') {
                         setLocale(langOverride);
                     } else {
-                        setLocale(bookingData.locale || 'hu');
+                        setLocale(foundBooking.locale || 'hu');
                     }
                 }
             } catch (err: any) {
                 console.error("Error fetching reservation:", err);
-                const errorMessage = String(err.message || '');
-                const errorCode = err.code || '';
-                if (errorMessage.includes('firestore/permission-denied') || errorCode === 'failed-precondition' || errorMessage.includes('requires an index')) {
-                    setError('Hiba az adatbázis indexek beállítása közben. Kérjük próbálja meg pár perc múlva.');
-                } else {
-                    setError('Hiba a foglalás betöltésekor.');
-                }
+                setError('Hiba a foglalás betöltésekor. Ellenőrizze a linket, vagy próbálja meg később.');
             } finally {
                 setLoading(false);
             }
