@@ -75,6 +75,11 @@ export interface Booking {
   notes?: string;
   phone?: string;
   email?: string;
+  contact?: {
+    phoneE164: string;
+    email: string;
+  };
+  locale?: 'hu' | 'en';
   cancelledAt?: Timestamp;
   cancelReason?: string;
 }
