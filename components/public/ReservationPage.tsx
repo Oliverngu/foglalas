@@ -207,7 +207,7 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
     if (loading || !unit || !settings) return <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center"><LoadingSpinner /></div>;
     
     return (
-        <div className="min-h-screen bg-[var(--color-background)] flex flex-col items-center p-4 sm:p-6 md:p-8" style={{ color: 'var(--color-text-primary)' }}>
+        <div className="h-full overflow-y-auto bg-[var(--color-background)] flex flex-col items-center p-4 sm:p-6 md:p-8" style={{ color: 'var(--color-text-primary)' }}>
             <div className="absolute top-4 right-4 flex items-center gap-2 text-sm font-medium">
                 <button onClick={() => setLocale('hu')} className={locale === 'hu' ? 'font-bold text-[var(--color-primary)]' : 'text-gray-500'}>Magyar</button>
                 <span className="text-gray-300">|</span>
@@ -374,7 +374,7 @@ const Step3Confirmation: React.FC<{ onReset: () => void, themeProps: any, t: any
                     <p><strong>{t.date}:</strong> {submittedData.date.toLocaleDateString(locale, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                     <p><strong>{t.startTime}:</strong> {submittedData.startTime.toDate().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</p>
                     <p><strong>{t.email}:</strong> {submittedData.contact.email}</p>
-                    <p><strong>{t.phone}:</strong> {maskPhone(submittedData.contact.phoneE164)}</p>
+                    <p><strong>{t.phone}:</strong> {submittedData.contact?.phoneE164 ? maskPhone(submittedData.contact.phoneE164) : 'N/A'}</p>
                  </div>
             )}
             

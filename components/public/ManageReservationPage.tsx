@@ -51,7 +51,13 @@ const ManageReservationPage: React.FC<ManageReservationPageProps> = ({ token, al
                 }
             } catch (err: any) {
                 console.error("Error fetching reservation:", err);
-                setError(err.message.includes('firestore/permission-denied') ? 'Hiba az adatbázis indexek beállítása közben. Kérjük próbálja meg pár perc múlva.' : 'Hiba a foglalás betöltésekor.');
+                const errorMessage = String(err.message || '');
+                const errorCode = err.code || '';
+                if (errorMessage.includes('firestore/permission-denied') || errorCode === 'failed-precondition' || errorMessage.includes('requires an index')) {
+                    setError('Hiba az adatbázis indexek beállítása közben. Kérjük próbálja meg pár perc múlva.');
+                } else {
+                    setError('Hiba a foglalás betöltésekor.');
+                }
             } finally {
                 setLoading(false);
             }
