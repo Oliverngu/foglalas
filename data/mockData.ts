@@ -73,15 +73,21 @@ export interface Booking {
   status: 'confirmed' | 'pending' | 'cancelled';
   createdAt: Timestamp;
   notes?: string;
-  phone?: string;
+  
+  // For admin-created bookings
+  phone?: string; 
   email?: string;
+
+  // For guest-submitted bookings
   contact?: {
     phoneE164: string;
     email: string;
   };
   locale?: 'hu' | 'en';
+
   cancelledAt?: Timestamp;
   cancelReason?: string;
+  referenceCode?: string;
 }
 
 export interface ThemeSettings {

@@ -3,6 +3,7 @@ import Login from './components/Login';
 import Register from './components/Register';
 import Dashboard from './components/Dashboard';
 import ReservationPage from './components/public/ReservationPage';
+import ManageReservationPage from './components/public/ManageReservationPage'; // Új import
 import { User, Request, Booking, Shift, Todo, Unit, RolePermissions, Permissions, demoUser, demoUnit, demoData, TimeEntry, Feedback, Poll } from './data/mockData';
 import { auth, db } from './firebase/config';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
@@ -12,7 +13,8 @@ import { UnitProvider } from './context/UnitContext';
 
 type AppState = 'login' | 'register' | 'dashboard' | 'loading' | 'public';
 type LoginMessage = { type: 'success' | 'error'; text: string };
-type PublicPage = { type: 'reserve'; unitId: string } | { type: 'error'; message: string };
+// Bővítettük a PublicPage típust a 'manage' állapottal
+type PublicPage = { type: 'reserve'; unitId: string } | { type: 'manage'; token: string } | { type: 'error'; message: string };
 
 const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>('loading');
@@ -44,8 +46,16 @@ const App: React.FC = () => {
     const isDemo = urlParams.get('demo') === 'true';
     const registerCode = urlParams.get('register');
     const isReservePage = pathname.startsWith('/reserve');
+    const isManagePage = pathname.startsWith('/manage'); // Új ellenőrzés
 
-    if (isReservePage) {
+    if (isManagePage) {
+        const token = urlParams.get('token');
+        if (token) {
+            setPublicPage({ type: 'manage', token });
+        } else {
+            setPublicPage({ type: 'error', message: 'Nincs foglalási azonosító megadva.' });
+        }
+    } else if (isReservePage) {
         const unitId = urlParams.get('unit');
         if (unitId) {
             setPublicPage({ type: 'reserve', unitId });
@@ -176,7 +186,7 @@ const App: React.FC = () => {
       }
 
       // Now, determine the final app state
-      if (isReservePage) {
+      if (isReservePage || isManagePage) {
         setAppState('public');
       } else if (finalUserData) {
         setAppState('dashboard');
@@ -336,7 +346,8 @@ const App: React.FC = () => {
         document.title = 'Dashboard - mintleaf.hu';
         break;
       case 'public':
-        document.title = 'Foglalás - mintleaf.hu';
+         if(publicPage?.type === 'reserve') document.title = 'Foglalás - mintleaf.hu';
+         else if (publicPage?.type === 'manage') document.title = 'Foglalás kezelése - mintleaf.hu';
         break;
       case 'loading':
         document.title = 'MintLeaf';
@@ -344,7 +355,7 @@ const App: React.FC = () => {
       default:
         document.title = 'MintLeaf';
     }
-  }, [appState]);
+  }, [appState, publicPage]);
 
   const handleLogout = async () => {
     if (isDemoMode) {
@@ -370,6 +381,9 @@ const App: React.FC = () => {
     case 'public':
         if (publicPage?.type === 'reserve') {
             return <ReservationPage unitId={publicPage.unitId} allUnits={allUnits} currentUser={currentUser} />;
+        }
+        if (publicPage?.type === 'manage') {
+            return <ManageReservationPage token={publicPage.token} allUnits={allUnits} />;
         }
         return (
             <div className="fixed inset-0 flex items-center justify-center bg-gray-50 p-4">
