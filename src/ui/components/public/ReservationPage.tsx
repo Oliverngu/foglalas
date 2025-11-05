@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Unit, ReservationSetting, User, ThemeSettings, GuestFormSettings } from '../../data/mockData';
-import { db, Timestamp } from '../../firebase/config';
+import { Unit, ReservationSetting, User, ThemeSettings, GuestFormSettings } from '../../../core/models/data';
+import { db, Timestamp } from '../../../core/firebase/config';
 import { doc, getDoc, collection, addDoc, setDoc } from 'firebase/firestore';
 import LoadingSpinner from '../LoadingSpinner';
 import CalendarIcon from '../icons/CalendarIcon';
 import CopyIcon from '../icons/CopyIcon'; // Új import
-import { translations } from '../../lib/i18n'; // Import a kiszervezett fájlból
+import { translations } from '../../../lib/i18n'; // Import a kiszervezett fájlból
 
 type Locale = 'hu' | 'en';
 
