@@ -180,9 +180,9 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
             await setDoc(newReservationRef, newReservation);
             setSubmittedData({ ...newReservation, date: selectedDate });
             setStep(3);
-// In TypeScript, the error in a catch block is of type `unknown`. This requires a type check before it can be used as a string.
         } catch (err) {
             console.error("Error submitting reservation:", err);
+            // FIX: The error in a catch block is of type `unknown`. This requires a type check before it can be used as a string.
             const errorMessage = (err instanceof Error) ? err.message : String(err);
             setError(`Hiba történt a foglalás elküldése során: ${errorMessage}. Kérjük, próbálja meg később.`);
         } finally {
