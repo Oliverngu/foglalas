@@ -110,7 +110,7 @@ const Register: React.FC<RegisterProps> = ({ inviteCode, onRegisterSuccess }) =>
         fullName: userFullName,
         email: email.trim(),
         role: inviteDetails.role,
-        unitIds: [inviteDetails.unitId],
+        unitIds: [inviteDetails.unitId], // Assign unitId into the new array structure
         position: inviteDetails.position,
         registrationEmailSent: true, // Mark as sent immediately
         notifications: {

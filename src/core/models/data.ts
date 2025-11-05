@@ -1,4 +1,4 @@
-import { Timestamp } from '../firebase/config';
+import { Timestamp } from 'firebase/firestore';
 
 // NEW: Define the structure for a single widget's configuration
 export interface WidgetConfig {
@@ -44,11 +44,11 @@ export interface User {
   role: 'Admin' | 'Unit Admin' | 'Unit Leader' | 'User' | 'Guest' | 'Demo User';
   unitIds?: string[];
   position?: string;
-  dashboardConfig?: WidgetConfig[];
-  registrationEmailSent?: boolean;
+  dashboardConfig?: WidgetConfig[]; // NEW: Add dashboard configuration to user
   notifications?: {
     newSchedule?: boolean;
   };
+  registrationEmailSent?: boolean;
 }
 
 export interface Request {
@@ -355,3 +355,5 @@ export const demoData = {
     allUsers: [demoUser, otherDemoUser] as User[],
 };
 // --- END DEMO MODE DATA ---
+
+export const mintLeafLogoSvgDataUri = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCI+PHBhdGggZmlsbD0iIzM0RDM5OSIgZD0iTTUgMjFjLjUtNC41IDIuNS04IDctMTBNOSAxOGM2LjIxOCAwIDEwLjUtMy4yODIgMTEtMTJ2LTJoLTQuMDE0Yy05IDAtMTEuOTg2IDQtMTIgOWMwIDEgMCAzIDIgNWgzeiIgLz48L3N2Zz4=";

@@ -146,7 +146,11 @@ const Dashboard: React.FC<DashboardProps> = ({
   const hasPermission = (permission: keyof Permissions | 'canManageAdminPage'): boolean => {
     if (currentUser.role === 'Admin') return true;
     if (currentUser.role === 'Demo User') { 
-        return permission.startsWith('canView') || permission === 'canSubmitLeaveRequests';
+        // FIX: Ensure permission is a string before calling startsWith
+        if (typeof permission === 'string') {
+            return permission.startsWith('canView') || permission === 'canSubmitLeaveRequests';
+        }
+        return false;
     }
     if (permission === 'canManageAdminPage') {
         return currentUser.role === 'Unit Admin' || hasPermission('canManageUsers') || hasPermission('canManagePositions') || hasPermission('canManageUnits');
@@ -298,7 +302,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                         activeUnitIds={activeUnitIds}
                     />;
         case 'beosztas':
-            return <BeosztasApp schedule={shifts} requests={requests} loading={false} error={null} currentUser={currentUser} canManage={hasPermission('canManageSchedules')} allUnits={allUnits} activeUnitIds={activeUnitIds} />;
+            return <BeosztasApp schedule={shifts} requests={requests} currentUser={currentUser} canManage={hasPermission('canManageSchedules')} allUnits={allUnits} activeUnitIds={activeUnitIds} />;
         case 'settings':
             return <UserSettingsApp user={currentUser} onLogout={onLogout} />;
         case 'todos':

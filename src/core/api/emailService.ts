@@ -1,172 +1,74 @@
-// src/core/api/emailService.ts
 import { emailProviderConfig } from '../config/emailConfig';
-import { User, Booking, Unit } from '../models/data';
+import { User, Unit } from '../models/data';
+import { registrationTemplate, newScheduleNotificationTemplate } from '../email/templates';
 
-// 1. Standardized types
-export type EmailMessageType =
-  | "registration_confirmation"
-  | "guest_reservation_confirmation"
-  | "unit_new_reservation_notification"
-  | "schedule_published_notification";
-
-export interface SendEmailParams {
+export interface EmailParams {
   to: string | string[];
   subject: string;
   html: string;
-  text?: string;
-  messageType: EmailMessageType;
-  locale?: "hu" | "en";
-  meta?: Record<string, unknown>; // Optional extra data for logging
 }
 
-// 2. Internal provider function (mock implementation)
-const sendViaMockProvider = async (params: SendEmailParams): Promise<void> => {
-  const { to, subject, html, messageType, meta, locale } = params;
-  
-  console.groupCollapsed(`📧 Mock Email Sent: [${messageType}]`);
-  console.log(`To:`, to);
-  console.log(`Subject:`, subject);
-  console.log(`Locale:`, locale || 'N/A');
-  if (meta) {
-    console.log(`Metadata:`, meta);
+export const sendEmail = async (params: EmailParams): Promise<{ success: boolean; message: string }> => {
+  if (emailProviderConfig.provider === 'mock') {
+    console.log('--- MOCK EMAIL SENT ---');
+    console.log('To:', params.to);
+    console.log('Subject:', params.subject);
+    // console.log('Body:', params.html);
+    console.log('-----------------------');
+    return { success: true, message: 'Mock email sent successfully.' };
   }
-  console.log(`HTML Body (first 100 chars):`, html.substring(0, 100) + '...');
-  // To inspect the full body, you can uncomment the next line
-  // console.log('Full HTML Body:', html);
-  console.groupEnd();
-  
-  // Simulate a short network delay
-  await new Promise(resolve => setTimeout(resolve, 100));
+
+  // Future implementation for Resend/SendGrid
+  // const { to, subject, html } = params;
+  // const from = emailProviderConfig.fromDefault || 'noreply@yourdomain.com';
+  // ... API call logic ...
+
+  return { success: false, message: 'Email provider not configured.' };
 };
 
-// Internal router for different providers
-const sendViaProvider = async (params: SendEmailParams): Promise<void> => {
-    switch (emailProviderConfig.provider) {
-        case "mock":
-            return sendViaMockProvider(params);
-        // case "resend":
-        //   return sendViaResend(params); // Future implementation
-        default:
-            console.error(`Unknown email provider configured: ${emailProviderConfig.provider}`);
-            // Silently fail, as per requirements
-            return;
-    }
-};
-
-
-// 3. Public API function with error handling
-export const sendEmail = async (params: SendEmailParams): Promise<void> => {
-  try {
-    await sendViaProvider(params);
-  } catch (error) {
-    console.error(`[emailService] Failed to send email of type "${params.messageType}". This error did not stop the application flow.`, {
-      params,
-      error,
-    });
-  }
-};
-
-
-// --- TEMPLATE GENERATORS ---
-// These functions now just create the SendEmailParams object for the main sendEmail function.
-
-export const createRegistrationEmail = (user: User): SendEmailParams => {
-  const subject = "Sikeres regisztráció a MintLeaf rendszerben";
-  const html = `
-    <h1>Üdv a MintLeaf csapatában, ${user.firstName}!</h1>
-    <p>A regisztrációd sikeres volt. Mostantól be tudsz jelentkezni a fiókodba.</p>
-    <p><strong>Felhasználónév:</strong> ${user.name}</p>
-    <p><strong>Szerepkör:</strong> ${user.role}</p>
-    <p>A rendszerbe a következő linken tudsz belépni:</p>
-    <a href="${window.location.origin}">Bejelentkezés</a>
-    <br><br>
-    <p>Üdvözlettel,<br>A MintLeaf Csapata</p>
-  `;
+export const createRegistrationEmail = (user: User): EmailParams => {
+  const subject = `Üdv a MintLeaf rendszerében, ${user.firstName}!`;
+  const html = registrationTemplate(user.firstName);
   return {
     to: user.email,
     subject,
     html,
-    messageType: 'registration_confirmation',
-    meta: { userId: user.id }
   };
 };
 
-export const createGuestReservationConfirmationEmail = (reservation: Booking, unit: Unit): SendEmailParams | null => {
-    if (!reservation.contact?.email) return null;
+export const createNewScheduleNotificationEmail = (user: User, weekLabel: string): EmailParams => {
+  const subject = `Új beosztás a(z) ${weekLabel} hétre`;
+  const html = newScheduleNotificationTemplate(user.firstName, weekLabel);
+  return {
+    to: user.email,
+    subject,
+    html,
+  };
+};
 
-    const subject = `Foglalásod beérkezett - ${unit.name}`;
-    const startTime = reservation.startTime.toDate().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
-    const date = reservation.startTime.toDate().toLocaleDateString('hu-HU');
-
-    const html = `
-        <h1>Kedves ${reservation.name}!</h1>
-        <p>Köszönjük, hogy a(z) <strong>${unit.name}</strong> éttermet választottad. Foglalási kérésedet megkaptuk, hamarosan felvesszük veled a kapcsolatot a megerősítéssel.</p>
-        <h3>Foglalásod részletei:</h3>
-        <ul>
-            <li><strong>Dátum:</strong> ${date}</li>
-            <li><strong>Időpont:</strong> ${startTime}</li>
-            <li><strong>Létszám:</strong> ${reservation.headcount} fő</li>
-            <li><strong>Alkalom:</strong> ${reservation.occasion}</li>
-            <li><strong>Azonosító:</strong> ${reservation.referenceCode}</li>
-        </ul>
-        <p>A foglalás lemondásához vagy módosításához kérjük, vedd fel velünk a kapcsolatot.</p>
-        <br>
-        <p>Üdvözlettel,<br>A(z) ${unit.name} csapata</p>
-    `;
+export const createGuestReservationConfirmationEmail = (booking: any, unit: Unit): EmailParams | null => {
+    if (!booking.contact?.email) return null;
+    const locale = booking.locale || 'hu';
+    const subject = locale === 'hu' ? `Foglalási kérés a ${unit.name} étterembe` : `Reservation request for ${unit.name}`;
+    // A proper template should be used here. For now, a simple text.
+    const html = `<p>Kedves ${booking.name},</p><p>Köszönjük foglalási kérését. Hamarosan jelentkezünk a megerősítéssel.</p><p>Azonosító: ${booking.referenceCode}</p>`;
     return {
-        to: reservation.contact.email,
+        to: booking.contact.email,
         subject,
         html,
-        messageType: 'guest_reservation_confirmation',
-        locale: reservation.locale || 'hu',
-        meta: { reservationId: reservation.id, unitId: unit.id }
     };
 };
 
-export const createUnitNewReservationNotificationEmail = (reservation: Booking, unit: Unit, recipientEmails: string[]): SendEmailParams => {
-    const subject = `Új foglalás érkezett - ${unit.name}`;
-    const startTime = reservation.startTime.toDate().toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
-    const date = reservation.startTime.toDate().toLocaleDateString('hu-HU');
-
-    const html = `
-        <h1>Új foglalás érkezett a(z) ${unit.name} részére</h1>
-        <h3>Részletek:</h3>
-        <ul>
-            <li><strong>Név:</strong> ${reservation.name}</li>
-            <li><strong>Dátum:</strong> ${date}</li>
-            <li><strong>Időpont:</strong> ${startTime}</li>
-            <li><strong>Létszám:</strong> ${reservation.headcount} fő</li>
-            <li><strong>Telefonszám:</strong> ${reservation.contact?.phoneE164 || 'N/A'}</li>
-            <li><strong>Email:</strong> ${reservation.contact?.email || 'N/A'}</li>
-            ${reservation.notes ? `<li><strong>Megjegyzés:</strong> ${reservation.notes}</li>` : ''}
-        </ul>
-        <p>A foglalás részletei a MintLeaf admin felületén is elérhetőek.</p>
-    `;
+export const createUnitNewReservationNotificationEmail = (booking: any, unit: Unit, recipientEmails: string[]): EmailParams => {
+     const subject = `Új foglalási kérés érkezett - ${unit.name}`;
+     const html = `<p>Új foglalási kérés érkezett a(z) ${unit.name} egységbe.</p>
+        <p><strong>Név:</strong> ${booking.name}</p>
+        <p><strong>Létszám:</strong> ${booking.headcount} fő</p>
+        <p><strong>Időpont:</strong> ${booking.startTime.toDate().toLocaleString('hu-HU')}</p>
+        <p>A foglalás kezeléséhez lépj be a MintLeaf admin felületére.</p>`;
     return {
         to: recipientEmails,
         subject,
         html,
-        messageType: 'unit_new_reservation_notification',
-        meta: { reservationId: reservation.id, unitId: unit.id }
-    };
-};
-
-
-export const createNewScheduleNotificationEmail = (user: User, weekLabel: string): SendEmailParams => {
-    const subject = `Új beosztásod elérhető a(z) ${weekLabel} hétre`;
-    const html = `
-        <h1>Szia ${user.firstName},</h1>
-        <p>A(z) <strong>${weekLabel}</strong> hétre vonatkozó új beosztásodat publikálták.</p>
-        <p>A részleteket megtekintheted a MintLeaf alkalmazásban bejelentkezés után.</p>
-        <a href="${window.location.origin}">Beosztás megtekintése</a>
-        <br><br>
-        <p>Üdvözlettel,<br>A MintLeaf Csapata</p>
-    `;
-    return {
-        to: user.email,
-        subject,
-        html,
-        messageType: 'schedule_published_notification',
-        meta: { userId: user.id, week: weekLabel }
     };
 };

@@ -182,10 +182,13 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
             await setDoc(newReservationRef, newReservation);
 
             // Send emails
-            const emailConfirmationParams = createGuestReservationConfirmationEmail(newReservation, unit);
-            if (emailConfirmationParams) {
-                await sendEmail(emailConfirmationParams);
+            if(newReservation.contact.email) {
+                const emailConfirmationParams = createGuestReservationConfirmationEmail(newReservation, unit);
+                if (emailConfirmationParams) {
+                    await sendEmail(emailConfirmationParams);
+                }
             }
+
 
             if (settings?.notificationEmails && settings.notificationEmails.length > 0) {
                 const unitNotificationParams = createUnitNewReservationNotificationEmail(newReservation, unit, settings.notificationEmails);
