@@ -34,6 +34,7 @@ export const translations = {
         manageLinkBody: "A foglalásod részleteit megtekintheted vagy lemondhatod a lenti, egyedi link segítségével. Mentsd el a linket a későbbi hozzáféréshez.",
         copy: "Másolás",
         copied: "Másolva!",
+        emailConfirmationSent: "A megerősítő e-mailt elküldtük a megadott címre.",
         dayNames: ['H', 'K', 'Sze', 'Cs', 'P', 'Szo', 'V'],
         monthNames: ["Január", "Február", "Március", "Április", "Május", "Június", "Július", "Augusztus", "Szeptember", "Október", "November", "December"],
 
@@ -88,6 +89,7 @@ export const translations = {
         manageLinkBody: "You can view the details of your reservation or cancel it using the unique link below. Please save it for future access.",
         copy: "Copy",
         copied: "Copied!",
+        emailConfirmationSent: "A confirmation email has been sent to the provided address.",
         dayNames: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
         monthNames: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
         

@@ -44,7 +44,11 @@ export interface User {
   role: 'Admin' | 'Unit Admin' | 'Unit Leader' | 'User' | 'Guest' | 'Demo User';
   unitIds?: string[];
   position?: string;
-  dashboardConfig?: WidgetConfig[]; // NEW: Add dashboard configuration to user
+  dashboardConfig?: WidgetConfig[];
+  registrationEmailSent?: boolean;
+  notifications?: {
+    newSchedule?: boolean;
+  };
 }
 
 export interface Request {
@@ -119,6 +123,7 @@ export interface ReservationSetting {
     guestForm?: GuestFormSettings;
     theme?: ThemeSettings;
     schemaVersion?: number;
+    notificationEmails?: string[];
 }
 
 

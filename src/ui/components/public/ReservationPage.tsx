@@ -6,6 +6,7 @@ import LoadingSpinner from '../LoadingSpinner';
 import CalendarIcon from '../icons/CalendarIcon';
 import CopyIcon from '../icons/CopyIcon'; // Új import
 import { translations } from '../../../lib/i18n'; // Import a kiszervezett fájlból
+import { sendEmail, createGuestReservationConfirmationEmail, createUnitNewReservationNotificationEmail } from '../../../core/api/emailService';
 
 type Locale = 'hu' | 'en';
 
@@ -154,7 +155,7 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedDate || !formData.startTime) return;
+        if (!selectedDate || !formData.startTime || !unit) return;
         setIsSubmitting(true);
         setError('');
         try {
@@ -176,13 +177,25 @@ const ReservationPage: React.FC<ReservationPageProps> = ({ unitId, allUnits, cur
                 startTime: Timestamp.fromDate(startDateTime), endTime: Timestamp.fromDate(endDateTime),
                 contact: { phoneE164: normalizePhone(formData.phone), email: formData.email.trim().toLowerCase() },
                 locale, status: 'pending' as const, createdAt: Timestamp.now(), referenceCode,
+                id: referenceCode, // Add id for email service
             };
             await setDoc(newReservationRef, newReservation);
+
+            // Send emails
+            const emailConfirmationParams = createGuestReservationConfirmationEmail(newReservation, unit);
+            if (emailConfirmationParams) {
+                await sendEmail(emailConfirmationParams);
+            }
+
+            if (settings?.notificationEmails && settings.notificationEmails.length > 0) {
+                const unitNotificationParams = createUnitNewReservationNotificationEmail(newReservation, unit, settings.notificationEmails);
+                await sendEmail(unitNotificationParams);
+            }
+
             setSubmittedData({ ...newReservation, date: selectedDate });
             setStep(3);
         } catch (err) {
             console.error("Error submitting reservation:", err);
-            // FIX: The error in a catch block is of type `unknown`. This requires a type check before it can be used as a string.
             const errorMessage = (err instanceof Error) ? err.message : String(err);
             setError(`Hiba történt a foglalás elküldése során: ${errorMessage}. Kérjük, próbálja meg később.`);
         } finally {
@@ -363,6 +376,7 @@ const Step3Confirmation: React.FC<{ onReset: () => void, themeProps: any, t: any
         <div className={`bg-[var(--color-surface)] p-8 ${themeProps.radiusClass} ${themeProps.shadowClass} border border-gray-100 text-center`}>
             <h2 className="text-2xl font-bold" style={{ color: 'var(--color-success)' }}>{t.step3Title}</h2>
             <p className="text-[var(--color-text-primary)] mt-4">{t.step3Body}</p>
+            <p className="text-sm text-gray-500 mt-2">{t.emailConfirmationSent}</p>
             
             {submittedData && (
                  <div className="mt-6 text-left bg-gray-50 p-4 rounded-lg border">

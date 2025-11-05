@@ -15,6 +15,7 @@ import ArrowUpIcon from '../icons/ArrowUpIcon';
 import ArrowDownIcon from '../icons/ArrowDownIcon';
 import EyeSlashIcon from '../icons/EyeSlashIcon';
 import EyeIcon from '../icons/EyeIcon';
+import { sendEmail, createNewScheduleNotificationEmail } from '../../../core/api/emailService';
 
 // Helper function to calculate shift duration in hours
 const calculateShiftDuration = (shift: Shift, dailyClosingTime?: string | null): number => {
@@ -261,8 +262,6 @@ const PublishWeekModal: FC<PublishWeekModalProps> = ({ units, onClose, onConfirm
 interface BeosztasAppProps {
     schedule: Shift[];
     requests: Request[];
-    loading: boolean;
-    error: string | null;
     currentUser: User;
     canManage: boolean;
     allUnits: Unit[];
@@ -1061,6 +1060,19 @@ export const BeosztasApp: FC<BeosztasAppProps> = ({ schedule, requests, currentU
             shiftsToPublish.forEach(shift => batch.update(doc(db, 'shifts', shift.id), { status: 'published' }));
             await batch.commit();
             alert('A kiválasztott műszakok sikeresen publikálva!');
+
+            // Find affected users and send notifications
+            const affectedUserIds = [...new Set(shiftsToPublish.map(s => s.userId))];
+            const weekLabel = `${weekDays[0].toLocaleDateString('hu-HU', {month: 'short', day: 'numeric'})} - ${weekDays[6].toLocaleDateString('hu-HU', {month: 'short', day: 'numeric'})}`;
+
+            affectedUserIds.forEach(userId => {
+                const user = allAppUsers.find(u => u.id === userId);
+                // Send email if user exists, has an email, and notifications are enabled (or not set, defaulting to on)
+                if (user && user.email && user.notifications?.newSchedule !== false) {
+                    const emailParams = createNewScheduleNotificationEmail(user, weekLabel);
+                    sendEmail(emailParams); // No need to await here, can be fire-and-forget
+                }
+            });
         }
         setIsPublishModalOpen(false);
     };
@@ -1439,4 +1451,143 @@ export const BeosztasApp: FC<BeosztasAppProps> = ({ schedule, requests, currentU
                              {canManage && (
                                 <th className={`p-1 sticky left-0 z-20 bg-slate-300 border-r border-gray-400 export-hide transition-all duration-300 ${isEditMode ? 'w-16' : 'w-8'}`}>
                                     <button 
-                                        onClick={() => setIsEditMode(
+                                        onClick={() => setIsEditMode(prev => !prev)}
+                                        className={`p-1.5 rounded-full w-full flex justify-center ${isEditMode ? 'bg-blue-200 text-blue-800' : 'hover:bg-slate-400'}`}
+                                        title={isEditMode ? "Szerkesztés befejezése" : "Sorrend szerkesztése"}
+                                    >
+                                        <PencilIcon className="h-5 w-5" />
+                                    </button>
+                                </th>
+                            )}
+                            <th className={`p-3 font-semibold text-center sticky ${canManage ? (isEditMode ? 'left-16' : 'left-8') : 'left-0'} bg-slate-300 z-10 w-52 transition-all duration-300`}>Munkatárs</th>
+                            {weekDays.map(day => (<th key={day.toISOString()} className="p-3 font-semibold text-center border-l border-gray-400 bg-slate-300 min-w-[90px]">{day.toLocaleDateString('hu-HU', { weekday: 'short' })}<br /><span className="font-normal text-sm">{day.toLocaleDateString('hu-HU', { month: '2-digit', day: '2-digit' })}</span></th>))}
+                            <th className="p-3 font-semibold text-center border-l border-gray-400 w-24 export-hide">Órák</th>
+                        </tr>
+                        {canManage && weekSettings?.showOpeningTime && (
+                           <tr style={{ backgroundColor: exportSettings.dayHeaderBgColor, color: getContrastingTextColor(exportSettings.dayHeaderBgColor) }}>
+                               <td style={{ backgroundColor: exportSettings.dayHeaderBgColor }} className={`p-2 sticky left-0 z-20 border-r border-gray-400 export-hide transition-all duration-300 ${isEditMode ? 'w-16' : 'w-8'}`}></td>
+                               <td style={{ backgroundColor: exportSettings.dayHeaderBgColor }} className={`p-2 font-bold sticky ${isEditMode ? 'left-16' : 'left-8'} z-10 transition-all duration-300`}>Nyitás</td>
+                               {Array.from({length: 7}).map((_, i)=>(<td key={i} className="p-2 border-l border-gray-400 text-center font-semibold">{weekSettings.dailySettings[i]?.openingTime}</td>))}
+                               <td className="border-l border-gray-400 export-hide"></td>
+                           </tr>
+                        )}
+                        {canManage && weekSettings?.showClosingTime && (
+                           <tr style={{ backgroundColor: exportSettings.dayHeaderBgColor, color: getContrastingTextColor(exportSettings.dayHeaderBgColor) }}>
+                                <td style={{ backgroundColor: exportSettings.dayHeaderBgColor }} className={`p-2 sticky left-0 z-20 border-r border-gray-400 export-hide transition-all duration-300 ${isEditMode ? 'w-16' : 'w-8'}`}></td>
+                               <td style={{ backgroundColor: exportSettings.dayHeaderBgColor }} className={`p-2 font-bold sticky ${isEditMode ? 'left-16' : 'left-8'} z-10 transition-all duration-300`}>Zárás</td>
+                               {Array.from({length: 7}).map((_, i)=>(<td key={i} className="p-2 border-l border-gray-400 text-center font-semibold">{weekSettings.dailySettings[i]?.closingTime}</td>))}
+                               <td className="border-l border-gray-400 export-hide"></td>
+                           </tr>
+                        )}
+                    </thead>
+                    <tbody>
+                        {visiblePositionOrder.map((position, groupIndex) => {
+                            const isFirstGroup = groupIndex === 0;
+                            const isLastGroup = groupIndex === visiblePositionOrder.length - 1;
+
+                            return (
+                                <React.Fragment key={position || 'no-position'}>
+                                    <tr className="bg-slate-300">
+                                        {canManage && (
+                                            <td className={`p-1 text-center sticky left-0 z-20 bg-slate-300 border-r border-gray-400 export-hide transition-all duration-300 ${isEditMode ? 'w-16' : 'w-8'}`}>
+                                                {isEditMode && (
+                                                    <div className="flex justify-center items-center gap-0.5">
+                                                        <button onClick={() => handleMoveGroup(position, 'up')} disabled={isFirstGroup} className="p-1 rounded-full hover:bg-gray-400 disabled:opacity-20 disabled:cursor-not-allowed" title="Csoport fel"><ArrowUpIcon className="h-5 w-5"/></button>
+                                                        <button onClick={() => handleMoveGroup(position, 'down')} disabled={isLastGroup} className="p-1 rounded-full hover:bg-gray-400 disabled:opacity-20 disabled:cursor-not-allowed" title="Csoport le"><ArrowDownIcon className="h-5 w-5"/></button>
+                                                    </div>
+                                                )}
+                                            </td>
+                                        )}
+                                        <td colSpan={canManage ? 8 : 8} className={`p-3 font-bold text-lg text-gray-800 sticky ${canManage ? (isEditMode ? 'left-16' : 'left-8') : 'left-0'} z-10 bg-slate-300 text-center align-middle transition-all duration-300`}>
+                                            {position}
+                                        </td>
+                                        <td className="export-hide"></td>
+                                    </tr>
+
+                                    {visibleUsersByPosition[position].map(user => {
+                                        userRowIndex++;
+                                        const isEven = userRowIndex % 2 === 0;
+                                        const userRequests = requestsByUserDay.get(user.id);
+
+                                        const usersInGroup = visibleUsersByPosition[position];
+                                        const userIndexInGroup = usersInGroup.findIndex(u => u.id === user.id);
+                                        const isFirstInGroup = userIndexInGroup === 0;
+                                        const isLastInGroup = userIndexInGroup === usersInGroup.length - 1;
+                                        
+                                        return (
+                                            <tr key={user.id} className={`group border-t border-gray-400 hover:bg-slate-200`}>
+                                                {canManage && (
+                                                    <td className={`p-1 text-center sticky left-0 z-10 ${isEven ? 'bg-slate-300' : 'bg-slate-200'} group-hover:bg-slate-200 border-r border-gray-400 export-hide transition-all duration-300 ${isEditMode ? 'w-16' : 'w-8'}`}>
+                                                        {isEditMode && (
+                                                            <div className="flex justify-center items-center gap-0.5">
+                                                                <button onClick={() => handleMoveUser(user.id, 'up')} disabled={isFirstInGroup} className="p-1 rounded-full hover:bg-gray-300 disabled:opacity-20 disabled:cursor-not-allowed" title="Fel"><ArrowUpIcon className="h-4 w-4"/></button>
+                                                                <button onClick={() => handleMoveUser(user.id, 'down')} disabled={isLastInGroup} className="p-1 rounded-full hover:bg-gray-300 disabled:opacity-20 disabled:cursor-not-allowed" title="Le"><ArrowDownIcon className="h-4 w-4"/></button>
+                                                                <div className="w-px h-4 bg-gray-300 mx-1"></div>
+                                                                <button onClick={() => handleHideUser(user.id)} className="p-1 rounded-full hover:bg-gray-300" title="Elrejtés"><EyeSlashIcon className="h-5 w-5"/></button>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                )}
+                                                <td className={`p-2 font-bold text-gray-800 sticky ${canManage ? (isEditMode ? 'left-16' : 'left-8') : 'left-0'} z-10 border-r border-gray-400 ${isEven ? 'bg-slate-300' : 'bg-slate-200'} group-hover:bg-slate-200 text-center align-middle transition-all duration-300`}>
+                                                    {user.fullName}
+                                                </td>
+                                                {weekDays.map((day) => {
+                                                    const dayKey = toDateString(day);
+                                                    const isOnLeave = userRequests?.has(dayKey);
+                                                    const dayShifts = shiftsByUserDay.get(user.id)?.get(dayKey) || [];
+                                                    
+                                                    return (
+                                                        <td key={dayKey} className={`p-1 border-l border-gray-400 text-center align-middle ${isOnLeave ? 'bg-red-50' : (isEven ? 'bg-slate-100' : 'bg-white')}`}>
+                                                            {isOnLeave ? (
+                                                                <div className="font-bold text-red-600 p-2">SZ</div>
+                                                            ) : (
+                                                                <div className="space-y-1">
+                                                                    {dayShifts.map(shift => (
+                                                                        <div key={shift.id} onClick={() => canManage && handleOpenShiftModal(shift, user.id, day)} className={`p-2 rounded-lg text-center ${canManage ? 'cursor-pointer hover:bg-gray-200' : ''}`}>
+                                                                            {shift.isDayOff ? (
+                                                                                <p className="font-bold text-lg">X</p>
+                                                                            ) : (
+                                                                                <>
+                                                                                    <p className="font-bold text-lg">
+                                                                                        {shift.start.toDate().toTimeString().substring(0,5)}
+                                                                                        {shift.end ? ` - ${shift.end.toDate().toTimeString().substring(0,5)}` : ''}
+                                                                                    </p>
+                                                                                    {shift.note && <p className="text-xs text-gray-600 truncate">{shift.note}</p>}
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    ))}
+                                                                    {canManage && (
+                                                                        <button onClick={() => handleOpenShiftModal(null, user.id, day)} className="w-full flex items-center justify-center p-1.5 rounded-md text-gray-400 hover:bg-green-100 hover:text-green-700 export-hide">
+                                                                            <PlusIcon className="h-5 w-5" />
+                                                                        </button>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="p-2 border-l border-gray-400 text-center font-bold text-gray-800 align-middle export-hide">
+                                                    {workHours.userTotals[user.id] > 0 ? workHours.userTotals[user.id].toFixed(1) : '-'}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </React.Fragment>
+                            )
+                        })}
+                    </tbody>
+                    <tfoot className="bg-slate-300 font-bold export-hide">
+                        <tr className="border-t-2 border-gray-500">
+                            <td colSpan={canManage ? 2 : 1} className={`sticky left-0 bg-slate-300 z-10 border-r border-gray-400 text-center align-middle transition-all duration-300`}>Összesen</td>
+                            {workHours.dayTotals.map((total, i) => (
+                                <td key={i} className="p-3 border-l border-gray-400 text-center">{total > 0 ? total.toFixed(1) : '-'}</td>
+                            ))}
+                            <td className="p-3 border-l border-gray-400 text-center">{workHours.grandTotal > 0 ? workHours.grandTotal.toFixed(1) : '-'}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    );
+};

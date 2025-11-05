@@ -6,6 +6,8 @@ import MintLeafLogo from './icons/AppleLogo';
 import ArrowIcon from './icons/ArrowIcon';
 import EyeIcon from './icons/EyeIcon';
 import EyeSlashIcon from './icons/EyeSlashIcon';
+import { User } from '../../core/models/data';
+import { sendEmail, createRegistrationEmail } from '../../core/api/emailService';
 
 interface RegisterProps {
   inviteCode: string;
@@ -101,26 +103,39 @@ const Register: React.FC<RegisterProps> = ({ inviteCode, onRegisterSuccess }) =>
       });
 
       // 5. Create user document in Firestore
-      const userData = {
+      const userDataForDb = {
         name: username.trim(),
         lastName: lastName.trim(),
         firstName: firstName.trim(),
         fullName: userFullName,
         email: email.trim(),
         role: inviteDetails.role,
-        unitIds: [inviteDetails.unitId], // Assign unitId into the new array structure
+        unitIds: [inviteDetails.unitId],
         position: inviteDetails.position,
+        registrationEmailSent: true, // Mark as sent immediately
+        notifications: {
+          newSchedule: true, // Default to on
+        },
       };
-      await setDoc(doc(db, 'users', user.uid), userData);
+      await setDoc(doc(db, 'users', user.uid), userDataForDb);
 
-      // 6. Mark invitation as used
+      // 6. Send registration email
+      const userForEmail: User = {
+          id: user.uid,
+          ...userDataForDb,
+          role: userDataForDb.role as User['role'],
+      };
+      const emailParams = createRegistrationEmail(userForEmail);
+      await sendEmail(emailParams);
+
+      // 7. Mark invitation as used
       await updateDoc(doc(db, 'invitations', inviteCode), {
         status: 'used',
         usedBy: user.uid,
         usedAt: new Date(),
       });
 
-      // 7. Call success callback
+      // 8. Call success callback
       onRegisterSuccess();
     } catch (err: any) {
       switch (err.code) {
